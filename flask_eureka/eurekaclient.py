@@ -44,6 +44,10 @@ class EurekaGetFailedException(EurekaClientException):
     pass
 
 
+class EurekaUnRegisterFailedException(EurekaClientException):
+    pass
+
+
 class EurekaClient(object):
     """
         Eureka Client
@@ -54,6 +58,7 @@ class EurekaClient(object):
     EUREKA_SERVICE_PATH = 'EUREKA_SERVICE_PATH'
     EUREKA_INSTANCE_HOSTNAME = 'EUREKA_INSTANCE_HOSTNAME'
     EUREKA_INSTANCE_PORT = 'EUREKA_INSTANCE_PORT'
+    EUREKA_HOME_PAGE_URL = 'EUREKA_HOME_PAGE_URL'
 
     def __init__(self,
                  name,
@@ -72,7 +77,8 @@ class EurekaClient(object):
                  eureka_port=None,
                  https_enabled=False,
                  heartbeat_interval=None,
-                 service_path=None):
+                 service_path=None,
+                 home_page_url=None):
 
         self.app_name = name
 
@@ -91,6 +97,8 @@ class EurekaClient(object):
         self.heartbeat_task = None
         self.instance_id = instance_id
         self.app_protocol = 'https://' if https_enabled else 'http://'
+        self.home_page_url = home_page_url or os.environ.get(EurekaClient.EUREKA_HOME_PAGE_URL,
+                                                             self.app_protocol + self.host_name + ':' + str(self.port))
 
         host_info = HostInfo().get()
 
@@ -210,7 +218,7 @@ class EurekaClient(object):
                 'ipAddr': self.vip_address,
                 'healthCheckUrl': self.app_protocol + self.host_name + ':' + str(self.port) + '/healthcheck',
                 'statusPageUrl': self.app_protocol + self.host_name + ':' + str(self.port) + '/healthcheck',
-                'homePageUrl': self.app_protocol + self.host_name + ':' + str(self.port) + '/healthcheck',
+                'homePageUrl': self.home_page_url,
                 'port': {
                     '$': self.port,
                     '@enabled': 'true',
@@ -223,7 +231,7 @@ class EurekaClient(object):
             },
         }
 
-    def star(self):
+    def start(self):
         """
         Start registration process
         :return:
@@ -261,7 +269,22 @@ class EurekaClient(object):
             except ApiException as ex:
                 success = False
         if not success:
-            raise EurekaRegistrationFailedException("Did not receive correct reply from any instances")
+            raise EurekaRegistrationFailedException("Did not receive correct reply from some instances")
+
+    def stop(self):
+        success = True
+        error_msg = ''
+        for eureka_url in self.eureka_urls:
+            try:
+                logger.info("Unregistering the app")
+                self.requests.DELETE(urljoin(eureka_url, self.service_path + "/{}/{}"
+                                             .format(self.app_name, self.get_instance_id())))
+                logger.info("Successfully unregistered")
+            except Exception as ex:
+                success = False
+                error_msg += str(ex) + '\n'
+        if not success:
+            raise EurekaUnRegisterFailedException("Did not receive correct reply from some instances: \n" + error_msg)
 
     def renew(self):
         """
