@@ -223,7 +223,15 @@ class EurekaClient(object):
                     '$': self.port,
                     '@enabled': 'true',
                 },
-                'vipAddress': self.vip_address,
+                'securePort': {
+                    '$': 443,
+                    '@enabled': 'true',
+                },
+                "metadata": {
+                    "management.port": self.port
+                },
+                'vipAddress': self.app_name,
+                'secureVipAddress': self.app_name,
                 'dataCenterInfo': {
                     '@class': 'com.netflix.appinfo.InstanceInfo$DefaultDataCenterInfo',
                     'name': 'MyOwn',
